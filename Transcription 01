@@ -1,0 +1,51 @@
+Escribe un resumen detallado de la siguiente transcripción. El resumen debe estar organizado en secciones, cada una con su propio encabezado y la marca de tiempo del momento en que comienza esa sección. Tu resumen debe estar en el mismo idioma que la transcripción. Tu publicación de blog debe estar en el mismo idioma que la transcripción. No dejes fuera ninguna información importante. Cada sección debe contener uno o más párrafos.
+
+"""
+(0:04 - 0:58)
+We talked about how indexes, adding them, can make your modification queries do more work. I mean, it's fairly obvious. Index data, you need to modify that data. 
+
+You need to modify the index structure that holds the data. That's pretty much the only sensible way to go about doing things, unless you like out-of-date, corrupt, stale data. I'm assuming you don't because you're not running NoSQL and whatever. 
+
+So let's talk now about how indexes can help queries. So we're going to look at some index design patterns that will allow you to start thinking about things outside of just getting missing index requests, like just trying to go along with whatever SQL Server suggests. And we're going to start simple and we'll work into some more complicated stuff.
+
+(0:58 - 1:16)
+Of course, this is foundational material, so don't expect to go crazy advanced. Here, there is way more advanced stuff in the query and index tuning sections. This is just to give you a good, solid foundation to work up to that stuff on.
+
+(1:18 - 5:30)
+So assuming that I convinced you to create a clustered index where there wasn't one, and you have a clustered index now, and you have a sane and rational clustered index because you followed my nudes acronym for choosing a clustered index. Understand that a clustered index is nice, but they don't always help you find data. So for instance, in the comments table in the Stack Overflow database, the clustered index, which is again also the primary key, is on a column called ID. 
+
+And if you're searching for IDs, then you're in pretty good shape. This being a unique column, not many people are searching for ranges in that. Most people, I think, when they have a unique index, they are searching for equality predicates in there. 
+
+So if you're searching for an ID and something else, you'll probably do okay. Even if you were searching for a small range of primary keys and something else, you would probably do okay. The thing is, if you're searching for stuff in another column, like creation date, post ID, score, god help you text, or user ID, the clustered index is of no help in locating that data because that data is not in any specific order to make searching it easier. 
+
+There are two main parts of a non-clustered row store index. Column store indexes are of course different, and we're not talking about those here. But the two main parts, the two most common parts of a non-clustered index are the key columns, which define the index order, the searchability of the index, and then included columns, which are columns that we might be displaying to users, might be filtering on, they might be far less selective predicates in an already sort of wide index with a wide set of keys. 
+
+There are lots of different ways to use included columns. Columns that generally make good key columns are, like we've discussed, WHERE, JOIN, ORDER BY, and GROUP BY. Those are typically columns that we would want to focus on, and probably in that order for choosing key columns for an index. 
+
+The reason that they help all these things is because key columns define the order of values in an index. That's really just all it is. You get the data in an order that makes searching it simpler for SQL Server. 
+
+Ordered data is just easier to find. You know, if you have all your stuff in a nice orderly filing cabinet, it's a lot easier to find than if it's just spread out all over your office and piles and random stuff. It's kind of obvious there. 
+
+But even for ranges, you know where to stop and start. So that's another nice thing about ordered data, is you have well-defined stop and start points. If your data is completely out of order, your only hope is to scan it all and check it for the values that you care about. 
+
+Include columns are mostly just window dressing. If you have columns in the select list or columns in a filter, then they generally make good includes. Included columns can be used for searching data in, but since there is no order, it's typically it's a design pattern. 
+
+If I had maybe a bit column in my search criteria, I may, and I already had like, you know, say three or four other where clause columns that would help me get to a more unique set of data, I would probably want to prioritize having those in the key of the index and maybe stick that bit column as an included column, just because if the table is 50-50 bits, ones and zeros, I don't know that seeking to half of the values in a table is really the most valuable way to spend my index. So to start off with a very simple example, we have on the post table, just right now, just the primary key and cluster index. That's it.
+
+(5:31 - 9:06)
+And this query is very score-centric. This, again, is a very simple example, just in case anyone really is starting from scratch on things. But if we have a query that's searching, that needs to select the top 1,000 scores, aggregate the scores to get a count of them, filter for anyone, for any score that's either one or two, so in one or two, group by score, because we're counting, we can't count without a group by, this isn't MySQL, and then we need to order by score descending. 
+
+So we pretty much have one column that's driving everything we need to do in this query. And right now, this query takes about 2.7 seconds, and it takes 2.7 seconds. Granted, we're starting with about 6.3 million rows, which is, I guess, a fairly good chunk of data, right? We have 6.3 million rows coming out of the post table, and we aggregate them, and we sort them, and we aggregate them again, and then we come up with our result set, which is, I don't know, exciting, I guess. 
+
+But if I'm given this query, and someone says, Eric, we need to tune this query, we either need to make it faster, or we need to have it use fewer resources when it runs, well, there's not a whole lot you can do with this query, unless you want to get really extravagant. But usually, people just need to focus on basics, like creating a good, useful index. If I run that same query with an index on the score column, everything changes about that query. 
+
+We run it about a third of the time, we no longer go parallel and use a bunch of extra resources, and it's just generally more efficient. Now, I know what you're thinking, maybe a second isn't great still, and maybe it's not, I don't know. Maybe there's more we could do. 
+
+But just to give you an idea of how immediately an index can change the performance profile of a query, well, here's a pretty good example. If we compare these two plans, there's a lot different, right? We only have to aggregate the data once, we no longer go parallel, we're not scanning the clustered index of the post table anymore, we're able to seek into our narrower non-clustered index. Just from an overall resource usage perspective and efficiency perspective, we're in pretty good shape. 
+
+These are the kind of things that I would want to document if I were tuning a query, if I were working with someone and saying, hey, you gave me this query to tune, here's the index I created, here was the immediate effect it had. We may still have to test this index out along with other queries that run in your environment to make sure that it doesn't regress other queries in some way. But here's a list of what changed between the query plan you handed me and the one I'm handing back to you just by changing an index. 
+
+We didn't have to go mess with anything else. So we do need indexes, and we need them in different ways in different places for different queries. It's not often that a query will be like that one with just one column being filtered and grouped and ordered by. 
+
+Usually, queries are far more complicated, and creating indexes as queries get more complicated, of course, also kind of scales and gets more complicated. So let's look at some more complicated index creation scenarios.
+"""        
